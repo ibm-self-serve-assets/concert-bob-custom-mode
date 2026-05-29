@@ -1,0 +1,391 @@
+<mcp_integration_guide>
+  <overview>
+    This guide explains how to use the IBM Concert MCP Server tools within the ConcertDef SBOM mode
+    to upload generated SBOMs and vulnerability scan reports directly to IBM Concert.
+  </overview>
+
+  <concert_mcp_server>
+    <description>
+      The Concert MCP Server provides two tools for interacting with IBM Concert APIs:
+      1. upload_application_sbom - Upload ConcertDef SBOM files
+      2. upload_vulnerability_scan - Upload vulnerability scan reports
+    </description>
+    <location>concert-mcp-server/</location>
+    <configuration>config.json with Concert API credentials</configuration>
+  </concert_mcp_server>
+
+  <tool_1_upload_application_sbom>
+    <name>upload_application_sbom</name>
+    <server>concert</server>
+    <purpose>Upload generated ConcertDef SBOM files to IBM Concert</purpose>
+    
+    <when_to_use>
+      <scenario>After successfully generating a ConcertDef SBOM file</scenario>
+      <scenario>When user explicitly requests to upload SBOM to Concert</scenario>
+      <scenario>As part of automated SBOM generation and upload workflow</scenario>
+    </when_to_use>
+
+    <parameters>
+      <parameter name="file_path" required="true">
+        <description>Absolute or relative path to the SBOM JSON file</description>
+        <examples>
+          <example>./my-application-sbom.json</example>
+          <example>/path/to/app-sbom.json</example>
+          <example>../ConcertDefSBOM_example</example>
+        </examples>
+      </parameter>
+    </parameters>
+
+    <usage_pattern>
+      <step>1. Generate ConcertDef SBOM file using write_to_file</step>
+      <step>2. Validate SBOM structure and content</step>
+      <step>3. Use use_mcp_tool to upload the SBOM</step>
+      <step>4. Check response for success/failure</step>
+      <step>5. Document upload result</step>
+    </usage_pattern>
+
+    <example_usage><![CDATA[
+After generating the SBOM file, upload it to Concert:
+
+<use_mcp_tool>
+<server_name>concert</server_name>
+<tool_name>upload_application_sbom</tool_name>
+<arguments>
+{
+  "file_path": "./my-application-sbom.json"
+}
+</arguments>
+</use_mcp_tool>
+    ]]></example_usage>
+
+    <response_handling>
+      <success>
+        <indicator>success: true in response</indicator>
+        <action>Confirm upload to user and document in generation notes</action>
+      </success>
+      <failure>
+        <indicator>success: false in response</indicator>
+        <action>Report error message to user and suggest corrections</action>
+      </failure>
+    </response_handling>
+
+    <validation_performed>
+      <check>File exists at specified path</check>
+      <check>File is valid JSON</check>
+      <check>bomFormat is "ConcertDef"</check>
+      <check>Required fields (specVersion, metadata) are present</check>
+    </validation_performed>
+  </tool_1_upload_application_sbom>
+
+  <tool_2_upload_vulnerability_scan>
+    <name>upload_image_scan / upload_code_scan / upload_vm_scan</name>
+    <server>concert</server>
+    <purpose>Upload vulnerability scan reports to IBM Concert</purpose>
+
+    <when_to_use>
+      <scenario>After processing vulnerability scan reports</scenario>
+      <scenario>When user wants to upload original scan reports to Concert</scenario>
+      <scenario>To provide vulnerability data alongside SBOM</scenario>
+    </when_to_use>
+
+    <critical_requirement>
+      MUST include application_name and application_version for successful upload.
+      The application_name should match the component name used in the ConcertDef SBOM.
+      Without these, Concert will reject the upload with "Data processing wasn't successful" error.
+    </critical_requirement>
+
+    <parameters>
+      <parameter name="file_path" required="true">
+        <description>Path to the vulnerability scan report file</description>
+        <supported_formats>CSV, JSON (including CycloneDX), XML (scanner-dependent)</supported_formats>
+      </parameter>
+      <parameter name="application_name" required="true">
+        <description>Name of the application in Concert (must match SBOM component name)</description>
+        <examples>
+          <example>digibank</example>
+          <example>my-application</example>
+          <example>web-service</example>
+        </examples>
+      </parameter>
+      <parameter name="scanner_name" required="true">
+        <description>Name of the vulnerability scanner</description>
+        <supported_scanners>
+          <scanner>trivy</scanner>
+          <scanner>snyk</scanner>
+          <scanner>grype</scanner>
+          <scanner>aqua</scanner>
+          <scanner>prisma</scanner>
+          <scanner>custom scanner names</scanner>
+        </supported_scanners>
+      </parameter>
+      <parameter name="metadata" required="true">
+        <description>Metadata as JSON object - MUST include application_version</description>
+        <required_fields>
+          <field>application_version - Version of the application (REQUIRED)</field>
+        </required_fields>
+        <optional_fields>
+          <field>scan_date - When the scan was performed</field>
+          <field>environment - Target environment (dev, stage, prod)</field>
+          <field>image_name - Container image name</field>
+          <field>branch - Git branch scanned</field>
+          <field>commit - Git commit SHA</field>
+        </optional_fields>
+      </parameter>
+    </parameters>
+
+    <usage_pattern>
+      <step>1. Identify scan report file(s) used for SBOM generation</step>
+      <step>2. Determine scanner type from report structure</step>
+      <step>3. Prepare optional metadata with context</step>
+      <step>4. Use use_mcp_tool to upload each scan report</step>
+      <step>5. Check response for success/failure</step>
+      <step>6. Document upload results</step>
+    </usage_pattern>
+
+    <example_usage><![CDATA[
+Upload a Grype CycloneDX scan report (CORRECT FORMAT):
+
+<use_mcp_tool>
+<server_name>concert</server_name>
+<tool_name>upload_image_scan</tool_name>
+<arguments>
+{
+  "file_path": "./digitalbank.json",
+  "application_name": "digibank",
+  "scanner_name": "grype",
+  "metadata": {
+    "application_version": "2.1.0",
+    "image_name": "digisic/digitalbank",
+    "format": "CycloneDX"
+  }
+}
+</arguments>
+</use_mcp_tool>
+
+Upload a Trivy scan report with required metadata:
+
+<use_mcp_tool>
+<server_name>concert</server_name>
+<tool_name>upload_image_scan</tool_name>
+<arguments>
+{
+  "file_path": "./trivy-scan-report.json",
+  "application_name": "myapp",
+  "scanner_name": "trivy",
+  "metadata": {
+    "application_version": "1.0.0",
+    "scan_date": "2024-01-15T10:30:00Z",
+    "environment": "production",
+    "branch": "main"
+  }
+}
+</arguments>
+</use_mcp_tool>
+    ]]></example_usage>
+
+    <response_handling>
+      <success>
+        <indicator>success: true in response</indicator>
+        <action>Confirm upload to user with scanner name and file</action>
+      </success>
+      <failure>
+        <indicator>success: false in response</indicator>
+        <action>Report error and suggest checking file path and scanner name</action>
+      </failure>
+    </response_handling>
+  </tool_2_upload_vulnerability_scan>
+
+  <complete_workflow_example>
+    <title>Generate SBOM and Upload to Concert</title>
+    <description>
+      Complete workflow showing SBOM generation from scan reports and upload to Concert
+    </description>
+    
+    <steps>
+      <step number="1">
+        <action>Analyze vulnerability scan reports</action>
+        <tools>list_files, read_file</tools>
+      </step>
+      
+      <step number="2">
+        <action>Extract component information</action>
+        <details>Parse scan reports to identify containers, libraries, repositories</details>
+      </step>
+      
+      <step number="3">
+        <action>Generate ConcertDef SBOM</action>
+        <tool>write_to_file</tool>
+        <output>my-application-sbom.json</output>
+      </step>
+      
+      <step number="4">
+        <action>Upload SBOM to Concert</action>
+        <tool>use_mcp_tool - upload_application_sbom</tool>
+        <example><![CDATA[
+<use_mcp_tool>
+<server_name>concert</server_name>
+<tool_name>upload_application_sbom</tool_name>
+<arguments>
+{
+  "file_path": "./my-application-sbom.json"
+}
+</arguments>
+</use_mcp_tool>
+        ]]></example>
+      </step>
+      
+      <step number="5">
+        <action>Upload scan reports to Concert</action>
+        <tool>use_mcp_tool - upload_image_scan (or upload_code_scan, upload_vm_scan)</tool>
+        <critical_note>
+          MUST extract component name from scan report and use as application_name.
+          MUST include application_version in metadata.
+        </critical_note>
+        <example><![CDATA[
+For CycloneDX/Grype scan:
+<use_mcp_tool>
+<server_name>concert</server_name>
+<tool_name>upload_image_scan</tool_name>
+<arguments>
+{
+  "file_path": "./digitalbank.json",
+  "application_name": "digibank",
+  "scanner_name": "grype",
+  "metadata": {
+    "application_version": "2.1.0",
+    "image_name": "digisic/digitalbank",
+    "scan_date": "2024-01-15"
+  }
+}
+</arguments>
+</use_mcp_tool>
+
+For Trivy scan:
+<use_mcp_tool>
+<server_name>concert</server_name>
+<tool_name>upload_image_scan</tool_name>
+<arguments>
+{
+  "file_path": "./trivy-report.json",
+  "application_name": "myapp",
+  "scanner_name": "trivy",
+  "metadata": {
+    "application_version": "1.0.0",
+    "scan_date": "2024-01-15",
+    "environment": "production"
+  }
+}
+</arguments>
+</use_mcp_tool>
+        ]]></example>
+      </step>
+      
+      <step number="6">
+        <action>Document the complete process</action>
+        <tool>write_to_file</tool>
+        <output>SBOM-generation-documentation.md</output>
+        <include>
+          - Scan reports analyzed
+          - Components identified
+          - SBOM file generated
+          - Upload results (success/failure)
+          - Timestamps
+        </include>
+      </step>
+    </steps>
+  </complete_workflow_example>
+
+  <best_practices>
+    <practice>
+      <title>Upload Order</title>
+      <description>Upload SBOM first, then scan reports</description>
+      <rationale>Concert can correlate scan data with SBOM components</rationale>
+    </practice>
+    
+    <practice>
+      <title>Include Metadata</title>
+      <description>Always include meaningful metadata with scan uploads</description>
+      <rationale>Helps track scan context and history in Concert</rationale>
+    </practice>
+    
+    <practice>
+      <title>Verify Before Upload</title>
+      <description>Validate SBOM structure before uploading</description>
+      <rationale>Prevents upload failures due to schema violations</rationale>
+    </practice>
+    
+    <practice>
+      <title>Document Uploads</title>
+      <description>Record upload results in generation documentation</description>
+      <rationale>Provides audit trail and troubleshooting information</rationale>
+    </practice>
+    
+    <practice>
+      <title>Handle Errors Gracefully</title>
+      <description>Check upload responses and report errors clearly</description>
+      <rationale>Helps users understand and resolve upload issues</rationale>
+    </practice>
+  </best_practices>
+
+  <troubleshooting>
+    <issue name="MCP Server Not Available">
+      <symptoms>Error about concert server not found</symptoms>
+      <solutions>
+        <solution>Verify Concert MCP server is configured in MCP settings</solution>
+        <solution>Check that concert-mcp-server is built (npm run build)</solution>
+        <solution>Restart MCP client to reload server configuration</solution>
+      </solutions>
+    </issue>
+    
+    <issue name="Authentication Failure">
+      <symptoms>401 or 403 errors from Concert API</symptoms>
+      <solutions>
+        <solution>Verify config.json has correct API credentials</solution>
+        <solution>Check instance_id and api_key are valid</solution>
+        <solution>Ensure auth_type is set to "C_API_KEY"</solution>
+      </solutions>
+    </issue>
+    
+    <issue name="File Not Found">
+      <symptoms>Error about file not existing</symptoms>
+      <solutions>
+        <solution>Use absolute paths or verify relative paths are correct</solution>
+        <solution>Check file was created successfully before upload</solution>
+        <solution>Verify file permissions allow reading</solution>
+      </solutions>
+    </issue>
+    
+    <issue name="Invalid SBOM Format">
+      <symptoms>Validation error about SBOM structure</symptoms>
+      <solutions>
+        <solution>Ensure bomFormat is "ConcertDef"</solution>
+        <solution>Verify all required fields are present</solution>
+        <solution>Check JSON syntax is valid</solution>
+        <solution>Validate against ConcertDef schema</solution>
+      </solutions>
+    </issue>
+  </troubleshooting>
+
+  <user_interaction_patterns>
+    <pattern name="explicit_upload_request">
+      <user_says>Upload the SBOM to Concert</user_says>
+      <user_says>Send this to IBM Concert</user_says>
+      <user_says>Upload to Concert</user_says>
+      <action>Use upload_application_sbom tool with the SBOM file path</action>
+    </pattern>
+    
+    <pattern name="scan_report_upload">
+      <user_says>Upload the scan report to Concert</user_says>
+      <user_says>Send the Trivy results to Concert</user_says>
+      <action>Use upload_vulnerability_scan tool with file path and scanner name</action>
+    </pattern>
+    
+    <pattern name="complete_workflow">
+      <user_says>Generate SBOM and upload to Concert</user_says>
+      <user_says>Create SBOM from scan and send to Concert</user_says>
+      <action>Generate SBOM, then upload both SBOM and scan reports</action>
+    </pattern>
+  </user_interaction_patterns>
+</mcp_integration_guide>
+
+<!-- Made with Bob -->

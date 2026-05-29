@@ -1,0 +1,445 @@
+<concertdef_sbom_workflow>
+  <overview>
+    This workflow guides the generation of ConcertDef SBOM files from vulnerability scan reports.
+    ConcertDef is IBM Concert's Application SBOM format (v1.0.2) used to describe software
+    applications, their components, dependencies, services, and deployment environments.
+  </overview>
+
+  <initialization_steps>
+    <step number="1">
+      <title>Understand the Request</title>
+      <description>Parse user input to identify what needs to be generated</description>
+      <actions>
+        <action>Identify the application name and version</action>
+        <action>Determine which scan reports are available</action>
+        <action>Understand the target environment(s) if specified</action>
+        <action>Check if business/organizational information is provided</action>
+      </actions>
+    </step>
+
+    <step number="2">
+      <title>Locate and Analyze Scan Reports</title>
+      <description>Find and examine all available vulnerability scan reports</description>
+      <tools>
+        <tool>list_files - Find scan report files in the workspace</tool>
+        <tool>read_file - Read scan report contents</tool>
+        <tool>search_files - Search for specific patterns in reports</tool>
+      </tools>
+      <scan_report_types>
+        <type name="trivy">
+          <description>Trivy scanner output (JSON format)</description>
+          <key_fields>Results, ArtifactName, ArtifactType, Vulnerabilities, Packages</key_fields>
+        </type>
+        <type name="snyk">
+          <description>Snyk scanner output (JSON format)</description>
+          <key_fields>vulnerabilities, dependencies, docker, packageManager</key_fields>
+        </type>
+        <type name="grype">
+          <description>Grype scanner output (JSON format)</description>
+          <key_fields>matches, source, artifact, distro</key_fields>
+        </type>
+        <type name="generic">
+          <description>Other scanner formats</description>
+          <approach>Analyze structure and extract component information</approach>
+        </type>
+      </scan_report_types>
+    </step>
+
+    <step number="3">
+      <title>Extract Component Information</title>
+      <description>Parse scan reports to identify components and their relationships</description>
+      <critical_note>
+        IMPORTANT: When extracting component information from scan reports, you MUST use the
+        component name from the scan report's metadata as the component name in the ConcertDef SBOM.
+        This is essential for Concert to properly associate vulnerability scans with SBOM components.
+      </critical_note>
+      <component_types>
+        <component type="container">
+          <extract>Image name, tag, digest, base image</extract>
+          <bom_ref_format>container:{registry}/{image-name}</bom_ref_format>
+          <component_name_rule>
+            CRITICAL: Component name must NOT include the image tag.
+            Extract only the image name portion, excluding any tag (e.g., ":latest", ":v1.0").
+            Example: From "digisic/digitalbank:latest" use only "digisic/digitalbank"
+          </component_name_rule>
+          <cyclonedx_extraction>
+            For CycloneDX format: Extract from metadata.component.name
+            Example: "digisic/digitalbank" from metadata.component.name (tag excluded)
+          </cyclonedx_extraction>
+        </component>
+        <component type="code">
+          <extract>Repository URL, commit SHA, branch</extract>
+          <bom_ref_format>repository:coderepo:{vcs}:{repo-name}</bom_ref_format>
+        </component>
+        <component type="library">
+          <extract>Package name, version, package manager</extract>
+          <bom_ref_format>library:{package-manager}:{package-name}</bom_ref_format>
+        </component>
+      </component_types>
+      <scan_format_specific_extraction>
+        <format name="CycloneDX">
+          <component_name_location>metadata.component.name</component_name_location>
+          <component_version_location>metadata.component.version</component_version_location>
+          <component_type_location>metadata.component.type</component_type_location>
+          <example>
+            From: {"metadata": {"component": {"name": "digisic/digitalbank", "type": "container"}}}
+            Use: "digisic/digitalbank" as the component name in ConcertDef SBOM
+          </example>
+        </format>
+        <format name="Trivy">
+          <component_name_location>ArtifactName or Metadata.ImageID</component_name_location>
+          <name_extraction_rule>
+            Strip the tag portion (everything after and including the colon) from the image name
+          </name_extraction_rule>
+          <example>
+            From: {"ArtifactName": "myapp:latest"}
+            Use: "myapp" as the component name (tag ":latest" excluded)
+          </example>
+        </format>
+        <format name="Grype">
+          <component_name_location>source.target.userInput or artifact.name</component_name_location>
+          <name_extraction_rule>
+            Strip the tag portion (everything after and including the colon) from the image name
+          </name_extraction_rule>
+          <example>
+            From: {"source": {"target": {"userInput": "myapp:v1.0"}}}
+            Use: "myapp" as the component name (tag ":v1.0" excluded)
+          </example>
+        </format>
+      </scan_format_specific_extraction>
+    </step>
+  </initialization_steps>
+
+  <main_workflow>
+    <phase name="structure_creation">
+      <description>Create the base ConcertDef SBOM structure</description>
+      <steps>
+        <step number="1">
+          <action>Create root structure with required fields</action>
+          <required_fields>
+            <field name="bomFormat">Always "ConcertDef"</field>
+            <field name="specVersion">Always "1.0.2"</field>
+            <field name="metadata">Contains timestamp, type, component, business</field>
+          </required_fields>
+        </step>
+
+        <step number="2">
+          <action>Populate metadata section</action>
+          <details>
+            - timestamp: Current ISO 8601 timestamp
+            - type: "application" (for Application SBOM)
+            - component: Application name and version
+            - business: Organization name and business units
+          </details>
+        </step>
+
+        <step number="3">
+          <action>Create components array</action>
+          <details>
+            Top-level component is typically a "build" type containing:
+            - Container images (blueprint-container)
+            - Code repositories (blueprint-code)
+            - Libraries (blueprint-library)
+          </details>
+        </step>
+      </steps>
+    </phase>
+
+    <phase name="component_population">
+      <description>Populate components from scan report data</description>
+      <steps>
+        <step number="1">
+          <action>Add build component</action>
+          <structure>
+            {
+              "bom-ref": "build:{app-name}",
+              "type": "build",
+              "name": "{app-name}",
+              "version": "{version}",
+              "components": []
+            }
+          </structure>
+        </step>
+
+        <step number="2">
+          <action>Add container components</action>
+          <for_each>Container image found in scan reports</for_each>
+          <critical_requirement>
+            MUST extract the component name from the scan report's metadata, but EXCLUDE the image tag.
+            For CycloneDX: Use metadata.component.name without tag (e.g., "digisic/digitalbank")
+            For Trivy: Use ArtifactName without tag (strip everything after ":")
+            For Grype: Use source.target.userInput without tag (strip everything after ":")
+            
+            The image tag should be stored separately in the "tag" field, NOT in the component name.
+            This ensures Concert can match vulnerability scans to SBOM components correctly.
+          </critical_requirement>
+          <structure>
+            {
+              "bom-ref": "container:{image-uri}",
+              "type": "container",
+              "name": "{image-name-without-tag}",
+              "uri": "{full-image-uri}",
+              "tag": "{image-tag}",
+              "digest": "{sha256-digest}",
+              "properties": [
+                {"name": "base_image", "value": "{base-image}"},
+                {"name": "scan_source", "value": "{scanner-name}"}
+              ]
+            }
+          </structure>
+          <example>
+            From scan report with "myapp:v1.2.3":
+            - name: "myapp" (tag excluded)
+            - tag: "v1.2.3" (stored separately)
+            - uri: "registry.example.com/myapp:v1.2.3"
+          </example>
+        </step>
+
+        <step number="3">
+          <action>Add code repository components</action>
+          <for_each>Repository identified in scan reports or context</for_each>
+          <structure>
+            {
+              "bom-ref": "repository:coderepo:{vcs}:{repo-name}",
+              "type": "code",
+              "name": "{repo-name}",
+              "purl": "{repository-url}",
+              "commit_sha": "{commit-hash}",
+              "branch": "{branch-name}",
+              "properties": [
+                {"name": "version_control", "value": "{vcs-type}"}
+              ]
+            }
+          </structure>
+        </step>
+      </steps>
+    </phase>
+
+    <phase name="environment_and_services">
+      <description>Define environments and services</description>
+      <steps>
+        <step number="1">
+          <action>Create environments array</action>
+          <common_environments>
+            <env>dev - Development environment</env>
+            <env>stage - Staging environment</env>
+            <env>prod - Production environment</env>
+          </common_environments>
+          <structure>
+            {
+              "bom-ref": "environment:{env-name}",
+              "type": "environment",
+              "name": "{env-name}",
+              "access-points": [],
+              "properties": []
+            }
+          </structure>
+        </step>
+
+        <step number="2">
+          <action>Create services array</action>
+          <description>Define application services/APIs</description>
+          <structure>
+            {
+              "bom-ref": "appapi:{service-name}",
+              "name": "{service-name}",
+              "endpoints": ["/"],
+              "properties": [
+                {"name": "network_exposure", "value": "public|internal"}
+              ]
+            }
+          </structure>
+        </step>
+      </steps>
+    </phase>
+
+    <phase name="dependencies">
+      <description>Map component dependencies</description>
+      <steps>
+        <step number="1">
+          <action>Create dependencies array</action>
+          <description>
+            Link components to their dependencies (services, code repos, etc.)
+          </description>
+          <structure>
+            {
+              "ref": "container:{image-name}",
+              "dependsOn": [
+                "appapi:{service-name}",
+                "repository:coderepo:{vcs}:{repo-name}"
+              ]
+            }
+          </structure>
+        </step>
+      </steps>
+    </phase>
+
+    <phase name="properties_and_tags">
+      <description>Add application-level properties and tags</description>
+      <steps>
+        <step number="1">
+          <action>Add properties array</action>
+          <common_properties>
+            <property name="application_criticality">Scale 1-5</property>
+            <property name="application_data_assessment_impact_risk">Scale 1-5</property>
+            <property name="revenue">Numeric value</property>
+          </common_properties>
+        </step>
+
+        <step number="2">
+          <action>Add tags array</action>
+          <description>Simple string tags for categorization</description>
+          <examples>["production", "microservice", "api"]</examples>
+        </step>
+      </steps>
+    </phase>
+
+    <phase name="validation">
+      <description>Validate the generated SBOM</description>
+      <steps>
+        <step number="1">
+          <action>Verify required fields are present</action>
+          <required>bomFormat, specVersion, metadata</required>
+        </step>
+
+        <step number="2">
+          <action>Validate metadata structure</action>
+          <required>timestamp, type, component (with name and version)</required>
+        </step>
+
+        <step number="3">
+          <action>Check bom-ref uniqueness</action>
+          <description>All bom-ref values must be unique across the SBOM</description>
+        </step>
+
+        <step number="4">
+          <action>Validate dependency references</action>
+          <description>All refs in dependencies must point to existing bom-refs</description>
+        </step>
+
+        <step number="5">
+          <action>Verify JSON structure</action>
+          <description>Ensure valid JSON syntax and proper nesting</description>
+        </step>
+      </steps>
+    </phase>
+
+    <phase name="documentation">
+      <description>Create documentation about the generation process</description>
+      <steps>
+        <step number="1">
+          <action>Document scan reports used</action>
+          <include>Scanner type, version, scan date, files analyzed</include>
+        </step>
+
+        <step number="2">
+          <action>Document components identified</action>
+          <include>Number and types of components, sources of information</include>
+        </step>
+
+        <step number="3">
+          <action>Document any assumptions or decisions</action>
+          <include>Missing information, inferred values, environment mappings</include>
+        </step>
+
+        <step number="4">
+          <action>Create usage instructions</action>
+          <include>How to upload to IBM Concert, validation steps</include>
+        </step>
+      </steps>
+    </phase>
+
+    <phase name="upload_to_concert">
+      <description>Upload generated SBOM and scan reports to IBM Concert using MCP tools</description>
+      <critical_prerequisite>
+        Before uploading, verify that component names in the ConcertDef SBOM match the component
+        names in the vulnerability scan reports. This is REQUIRED for Concert to properly associate
+        vulnerability data with SBOM components.
+      </critical_prerequisite>
+      <steps>
+        <step number="1">
+          <action>Verify Component Name Consistency</action>
+          <validation>
+            - Check that SBOM component names match scan report component names
+            - For CycloneDX scans: SBOM component name must match metadata.component.name
+            - For Trivy scans: SBOM component name must match ArtifactName
+            - For Grype scans: SBOM component name must match source.target.userInput
+            - If mismatch found, regenerate SBOM with correct component names
+          </validation>
+        </step>
+
+        <step number="2">
+          <action>Upload Application SBOM</action>
+          <tool>use_mcp_tool with upload_application_sbom</tool>
+          <details>
+            After generating the ConcertDef SBOM file, upload it to IBM Concert:
+            - Use the concert MCP server's upload_application_sbom tool
+            - Provide the file path to the generated SBOM JSON file
+            - Verify successful upload from the response
+          </details>
+        </step>
+
+        <step number="3">
+          <action>Upload Vulnerability Scan Reports</action>
+          <tool>use_mcp_tool with upload_image_scan, upload_code_scan, or upload_vm_scan</tool>
+          <required_parameters>
+            - file_path: Path to the scan report
+            - application_name: Name of the application in Concert
+            - scanner_name: Scanner that generated the report (grype, trivy, snyk, etc.)
+            - metadata.application_version: Version of the application
+          </required_parameters>
+          <details>
+            Upload the original vulnerability scan reports to Concert:
+            - Use the appropriate upload tool based on scan type
+            - MUST include application_name parameter (matches SBOM metadata.component.name)
+            - MUST include application_version in metadata
+            - Include scanner_name (grype, trivy, snyk, etc.)
+            - Add optional metadata (scan date, environment, image name, etc.)
+            - Verify successful upload from the response
+          </details>
+          <example>
+            For a Grype scan of "digisic/digitalbank":
+            - application_name: "digibank" (or full name from scan)
+            - scanner_name: "grype"
+            - metadata.application_version: "2.1.0" (from scan or SBOM)
+            - metadata.image_name: "digisic/digitalbank"
+          </example>
+        </step>
+      </steps>
+    </phase>
+  </main_workflow>
+
+  <completion_criteria>
+    <criterion>SBOM file is valid JSON</criterion>
+    <criterion>All required ConcertDef v1.0.2 fields are present</criterion>
+    <criterion>All components from scan reports are included</criterion>
+    <criterion>Dependencies are properly mapped</criterion>
+    <criterion>bom-ref values are unique and properly referenced</criterion>
+    <criterion>Documentation explains the generation process</criterion>
+    <criterion>SBOM is ready for upload to IBM Concert</criterion>
+    <criterion>SBOM has been successfully uploaded to Concert (if requested)</criterion>
+    <criterion>Scan reports have been uploaded to Concert (if requested)</criterion>
+  </completion_criteria>
+
+  <error_handling>
+    <scenario name="missing_scan_reports">
+      <action>Ask user to provide scan report files or locations</action>
+    </scenario>
+    <scenario name="unrecognized_format">
+      <action>Analyze structure and attempt to extract component information</action>
+      <action>Ask user for clarification if needed</action>
+    </scenario>
+    <scenario name="incomplete_information">
+      <action>Use reasonable defaults where possible</action>
+      <action>Document assumptions in generation documentation</action>
+      <action>Ask user for critical missing information</action>
+    </scenario>
+    <scenario name="validation_failure">
+      <action>Identify specific validation errors</action>
+      <action>Fix issues and re-validate</action>
+      <action>Document corrections made</action>
+    </scenario>
+  </error_handling>
+</concertdef_sbom_workflow>
+
+<!-- Made with Bob -->

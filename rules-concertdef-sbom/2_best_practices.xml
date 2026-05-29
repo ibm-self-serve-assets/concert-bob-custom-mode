@@ -1,0 +1,230 @@
+<concertdef_sbom_best_practices>
+  <general_principles>
+    <principle priority="high">
+      <name>Schema Compliance</name>
+      <description>
+        Always ensure the generated SBOM strictly follows ConcertDef v1.0.2 schema.
+        Every field must match the schema requirements for type, format, and constraints.
+      </description>
+      <rationale>
+        IBM Concert will reject non-compliant SBOMs, causing upload failures and
+        requiring regeneration. Schema compliance is non-negotiable.
+      </rationale>
+      <checklist>
+        <item>bomFormat must be exactly "ConcertDef"</item>
+        <item>specVersion must be exactly "1.0.2"</item>
+        <item>metadata section must include timestamp, type, and component</item>
+        <item>All bom-ref values must be unique strings</item>
+        <item>All dependency refs must reference existing bom-refs</item>
+      </checklist>
+    </principle>
+
+    <principle priority="high">
+      <name>Accurate Component Identification</name>
+      <description>
+        Extract component information accurately from scan reports. Each component
+        must have correct name, version, type, and identifying information.
+      </description>
+      <rationale>
+        Inaccurate component data leads to incorrect vulnerability tracking and
+        compliance issues in IBM Concert.
+      </rationale>
+      <guidelines>
+        <guideline>Use exact image URIs including registry, repository, and digest</guideline>
+        <guideline>Include full commit SHAs for code repositories</guideline>
+        <guideline>Preserve original package names and versions from scan reports</guideline>
+        <guideline>Map scanner-specific fields to ConcertDef fields correctly</guideline>
+      </guidelines>
+    </principle>
+
+    <principle priority="medium">
+      <name>Complete Dependency Mapping</name>
+      <description>
+        Map all component relationships accurately in the dependencies array.
+        This shows how containers relate to services and code repositories.
+      </description>
+      <rationale>
+        Dependency information helps IBM Concert understand application architecture
+        and trace vulnerabilities through the component graph.
+      </rationale>
+    </principle>
+  </general_principles>
+
+  <bom_ref_conventions>
+    <convention category="format">
+      <rule>Use consistent, descriptive bom-ref formats</rule>
+      <formats>
+        <format type="build">build:{application-name}</format>
+        <format type="container">container:{registry}/{image-name}</format>
+        <format type="code">repository:coderepo:{vcs-type}:{repo-name}</format>
+        <format type="library">library:{package-manager}:{package-name}</format>
+        <format type="environment">environment:{env-name}</format>
+        <format type="service">appapi:{service-name}</format>
+      </formats>
+    </convention>
+
+    <convention category="uniqueness">
+      <rule>Ensure all bom-ref values are globally unique within the SBOM</rule>
+      <validation>
+        Before finalizing SBOM, verify no duplicate bom-ref values exist.
+      </validation>
+    </convention>
+  </bom_ref_conventions>
+
+  <scan_report_parsing>
+    <best_practice name="trivy_reports">
+      <description>Extract components from Trivy JSON output</description>
+      <key_sections>
+        <section>Results - Array of scan results for different artifacts</section>
+        <section>ArtifactName - Image name or file path being scanned</section>
+        <section>ArtifactType - Type: container_image, filesystem, repository</section>
+        <section>Metadata - Image metadata including RepoTags, RepoDigests</section>
+      </key_sections>
+    </best_practice>
+
+    <best_practice name="snyk_reports">
+      <description>Extract components from Snyk JSON output</description>
+      <key_sections>
+        <section>docker - Docker image information if scanning containers</section>
+        <section>packageManager - Package manager type (npm, pip, maven)</section>
+        <section>dependencies - Dependency tree with package names and versions</section>
+      </key_sections>
+    </best_practice>
+
+    <best_practice name="grype_reports">
+      <description>Extract components from Grype JSON output</description>
+      <key_sections>
+        <section>source - Source information about what was scanned</section>
+        <section>artifact - Artifact details including name, version, type</section>
+        <section>distro - Distribution information for containers</section>
+      </key_sections>
+    </best_practice>
+  </scan_report_parsing>
+
+  <metadata_best_practices>
+    <practice name="timestamp">
+      <rule>Use current UTC timestamp in ISO 8601 format</rule>
+      <format>YYYY-MM-DDTHH:mm:ssZ</format>
+      <example>2024-12-06T15:23:57Z</example>
+    </practice>
+
+    <practice name="component_naming">
+      <rule>Use clear, consistent application names</rule>
+      <guidelines>
+        <guideline>Match the primary application or service name</guideline>
+        <guideline>Use lowercase with hyphens for multi-word names</guideline>
+        <guideline>Avoid special characters except hyphens</guideline>
+      </guidelines>
+    </practice>
+
+    <practice name="business_information">
+      <rule>Include business/organizational context when available</rule>
+      <required>name - Organization name</required>
+      <optional>units - Business units with contact information</optional>
+    </practice>
+  </metadata_best_practices>
+
+  <property_usage>
+    <standard_properties>
+      <property name="application_criticality" level="application">
+        Business criticality rating (1-5)
+      </property>
+      <property name="application_data_assessment_impact_risk" level="application">
+        Data impact risk rating (1-5)
+      </property>
+      <property name="revenue" level="application">
+        Revenue impact (numeric)
+      </property>
+      <property name="base_image" level="container">
+        Base container image name
+      </property>
+      <property name="version_control" level="code">
+        VCS type (github, gitlab, etc.)
+      </property>
+      <property name="network_exposure" level="service">
+        Network exposure (public, internal, private)
+      </property>
+      <property name="platform_type" level="environment">
+        Platform type (kubernetes, vm, ec2, etc.)
+      </property>
+    </standard_properties>
+  </property_usage>
+
+  <validation_checklist>
+    <check priority="critical">
+      <item>Valid JSON syntax</item>
+      <item>bomFormat is "ConcertDef"</item>
+      <item>specVersion is "1.0.2"</item>
+      <item>metadata.timestamp is valid ISO 8601</item>
+      <item>metadata.type is "application"</item>
+      <item>metadata.component has name and version</item>
+    </check>
+    <check priority="high">
+      <item>All bom-ref values are unique</item>
+      <item>All dependency refs point to existing bom-refs</item>
+      <item>All required component fields are present</item>
+      <item>Container URIs include digest when available</item>
+      <item>Code repositories include commit SHA</item>
+    </check>
+    <check priority="medium">
+      <item>Properties use standard names where applicable</item>
+      <item>Tags are meaningful and descriptive</item>
+      <item>Environment names are consistent</item>
+      <item>Service endpoints are properly formatted</item>
+    </check>
+  </validation_checklist>
+
+  <common_pitfalls>
+    <pitfall>
+      <description>Using non-unique bom-ref values</description>
+      <impact>SBOM validation failure, dependency resolution errors</impact>
+      <solution>Use descriptive, hierarchical identifiers that naturally avoid collisions</solution>
+    </pitfall>
+
+    <pitfall>
+      <description>Missing container digests</description>
+      <impact>Cannot uniquely identify container versions</impact>
+      <solution>Always extract and include SHA256 digests from scan reports</solution>
+    </pitfall>
+
+    <pitfall>
+      <description>Incomplete dependency mapping</description>
+      <impact>Broken component relationships in IBM Concert</impact>
+      <solution>Map all known relationships between containers, services, and code</solution>
+    </pitfall>
+
+    <pitfall>
+      <description>Incorrect timestamp format</description>
+      <impact>Schema validation failure</impact>
+      <solution>Always use ISO 8601 UTC format with 'Z' suffix</solution>
+    </pitfall>
+
+    <pitfall>
+      <description>Missing metadata.business information</description>
+      <impact>Cannot associate SBOM with organization in Concert</impact>
+      <solution>Always ask for organization name if not provided</solution>
+    </pitfall>
+  </common_pitfalls>
+
+  <quality_guidelines>
+    <guideline category="completeness">
+      <rule>Include all components found in scan reports</rule>
+      <rule>Document any components that couldn't be included</rule>
+      <rule>Provide properties for additional context</rule>
+    </guideline>
+
+    <guideline category="accuracy">
+      <rule>Verify component names match scan report data exactly</rule>
+      <rule>Double-check version strings and digests</rule>
+      <rule>Validate all URLs and URIs are properly formatted</rule>
+    </guideline>
+
+    <guideline category="maintainability">
+      <rule>Use consistent naming conventions throughout</rule>
+      <rule>Add comments in documentation about generation decisions</rule>
+      <rule>Structure SBOM for easy human readability</rule>
+    </guideline>
+  </quality_guidelines>
+</concertdef_sbom_best_practices>
+
+<!-- Made with Bob -->

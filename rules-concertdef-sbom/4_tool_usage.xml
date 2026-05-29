@@ -1,0 +1,282 @@
+<tool_usage_guide>
+  <overview>
+    Specific guidance on using Bob's tools effectively for ConcertDef SBOM generation.
+  </overview>
+
+  <tool_priorities>
+    <priority level="1">
+      <tool>list_files</tool>
+      <when>First step - identify available scan reports</when>
+      <why>Need to know what input files are available before processing</why>
+    </priority>
+
+    <priority level="2">
+      <tool>read_file</tool>
+      <when>After identifying scan reports</when>
+      <why>Must read scan report contents to extract component information</why>
+      <note>Read multiple scan reports at once (up to 5 files) for efficiency</note>
+    </priority>
+
+    <priority level="3">
+      <tool>write_to_file</tool>
+      <when>Creating the SBOM JSON file and documentation</when>
+      <why>Generate the complete ConcertDef SBOM file and documentation</why>
+    </priority>
+  </tool_priorities>
+
+  <tool_specific_guidance>
+    <tool name="list_files">
+      <purpose>Find scan report files in the workspace</purpose>
+      <best_practices>
+        <practice>Use recursive listing to find reports in subdirectories</practice>
+        <practice>Look for common scan report patterns</practice>
+      </best_practices>
+      <patterns_to_find>
+        <pattern>trivy*.json - Trivy scan reports</pattern>
+        <pattern>snyk*.json - Snyk scan reports</pattern>
+        <pattern>grype*.json - Grype scan reports</pattern>
+        <pattern>*scan*.json - Generic scan reports</pattern>
+      </patterns_to_find>
+    </tool>
+
+    <tool name="read_file">
+      <purpose>Read scan report contents and extract component data</purpose>
+      <best_practices>
+        <practice>Read multiple related files at once (up to 5 files)</practice>
+        <practice>Parse JSON structure to identify scanner type</practice>
+        <practice>Extract all relevant component information in one pass</practice>
+      </best_practices>
+      <extraction_strategy>
+        <step>Identify scanner type from JSON structure</step>
+        <step>Locate component information sections</step>
+        <step>Extract names, versions, URIs, digests</step>
+        <step>Note any missing required information</step>
+      </extraction_strategy>
+    </tool>
+
+    <tool name="search_files">
+      <purpose>Find specific patterns in scan reports</purpose>
+      <when_to_use>
+        When you need to find specific information across multiple files,
+        such as all container image references or repository URLs
+      </when_to_use>
+      <useful_patterns>
+        <pattern>sha256:[a-f0-9]{64} - Find container digests</pattern>
+        <pattern>https?://[^\s]+ - Find repository URLs</pattern>
+        <pattern>@sha256: - Find image references with digests</pattern>
+      </useful_patterns>
+    </tool>
+
+    <tool name="write_to_file">
+      <purpose>Create the ConcertDef SBOM JSON file</purpose>
+      <critical_requirements>
+        <requirement>MUST provide complete, valid JSON</requirement>
+        <requirement>MUST include all required ConcertDef fields</requirement>
+        <requirement>MUST ensure proper JSON syntax</requirement>
+        <requirement>MUST calculate correct line_count</requirement>
+      </critical_requirements>
+      <best_practices>
+        <practice>Format JSON with proper indentation (2 spaces)</practice>
+        <practice>Validate JSON structure before writing</practice>
+        <practice>Use descriptive filename (e.g., app-name-sbom.json)</practice>
+        <practice>Double-check all bom-ref values are unique</practice>
+      </best_practices>
+      <validation_before_writing>
+        <check>Verify JSON syntax is valid</check>
+        <check>Confirm all required fields present</check>
+        <check>Validate bom-ref uniqueness</check>
+        <check>Check dependency references are valid</check>
+        <check>Ensure timestamp is ISO 8601 format</check>
+      </validation_before_writing>
+    </tool>
+
+    <tool name="ask_followup_question">
+      <purpose>Request missing information from user</purpose>
+      <when_to_use>
+        <scenario>Organization/business name not provided</scenario>
+        <scenario>Application name or version unclear</scenario>
+        <scenario>Multiple scan reports found, need clarification</scenario>
+        <scenario>Environment information needed</scenario>
+      </when_to_use>
+      <best_practices>
+        <practice>Provide 2-4 specific, actionable suggestions</practice>
+        <practice>Make suggestions complete (no placeholders)</practice>
+        <practice>Order suggestions by likelihood</practice>
+      </best_practices>
+    </tool>
+
+    <tool name="execute_command">
+      <purpose>Run validation or processing commands</purpose>
+      <when_to_use>
+        <scenario>Validate JSON syntax using jq</scenario>
+        <scenario>Extract specific data from scan reports</scenario>
+        <scenario>Generate timestamps</scenario>
+      </when_to_use>
+      <useful_commands>
+        <command>jq empty file.json - Validate JSON syntax</command>
+        <command>date -u +"%Y-%m-%dT%H:%M:%SZ" - Generate ISO 8601 timestamp</command>
+        <command>jq '.Results[].ArtifactName' report.json - Extract artifact names</command>
+      </useful_commands>
+    </tool>
+
+    <tool name="use_mcp_tool">
+      <purpose>Upload SBOM and scan reports to IBM Concert</purpose>
+      <available_tools>
+        <mcp_tool name="upload_application_sbom">
+          <server>concert</server>
+          <description>Upload ConcertDef SBOM files to IBM Concert</description>
+          <required_parameters>
+            <parameter name="file_path">Path to the SBOM JSON file</parameter>
+          </required_parameters>
+          <usage_example><![CDATA[
+<use_mcp_tool>
+<server_name>concert</server_name>
+<tool_name>upload_application_sbom</tool_name>
+<arguments>
+{
+  "file_path": "./my-application-sbom.json"
+}
+</arguments>
+</use_mcp_tool>
+          ]]></usage_example>
+        </mcp_tool>
+
+        <mcp_tool name="upload_vulnerability_scan">
+          <server>concert</server>
+          <description>Upload vulnerability scan reports to IBM Concert</description>
+          <required_parameters>
+            <parameter name="file_path">Path to the scan report file</parameter>
+            <parameter name="scanner_name">Name of the scanner (trivy, snyk, grype, etc.)</parameter>
+          </required_parameters>
+          <optional_parameters>
+            <parameter name="metadata">Additional metadata as JSON object</parameter>
+          </optional_parameters>
+          <usage_example><![CDATA[
+<use_mcp_tool>
+<server_name>concert</server_name>
+<tool_name>upload_vulnerability_scan</tool_name>
+<arguments>
+{
+  "file_path": "./trivy-scan-report.json",
+  "scanner_name": "trivy",
+  "metadata": {
+    "scan_date": "2024-01-15",
+    "environment": "production"
+  }
+}
+</arguments>
+</use_mcp_tool>
+          ]]></usage_example>
+        </mcp_tool>
+      </available_tools>
+
+      <when_to_use>
+        <scenario>After generating a ConcertDef SBOM file</scenario>
+        <scenario>When user requests to upload SBOM to Concert</scenario>
+        <scenario>After processing vulnerability scan reports</scenario>
+        <scenario>When user wants to upload scan reports to Concert</scenario>
+      </when_to_use>
+
+      <best_practices>
+        <practice>Upload SBOM first, then scan reports</practice>
+        <practice>Verify file paths are correct before uploading</practice>
+        <practice>Include meaningful metadata with scan uploads</practice>
+        <practice>Check upload response for success/failure</practice>
+        <practice>Document upload results in generation documentation</practice>
+      </best_practices>
+
+      <error_handling>
+        <error type="file_not_found">
+          <cause>File path is incorrect or file doesn't exist</cause>
+          <solution>Verify file path and ensure file was created successfully</solution>
+        </error>
+        <error type="invalid_sbom_format">
+          <cause>SBOM doesn't match ConcertDef schema</cause>
+          <solution>Validate SBOM structure and fix any schema violations</solution>
+        </error>
+        <error type="authentication_error">
+          <cause>Concert API credentials are invalid or missing</cause>
+          <solution>Verify Concert MCP server configuration and credentials</solution>
+        </error>
+        <error type="api_error">
+          <cause>Concert API returned an error</cause>
+          <solution>Check error message and Concert API status</solution>
+        </error>
+      </error_handling>
+    </tool>
+  </tool_specific_guidance>
+
+  <workflow_tool_sequence>
+    <phase name="discovery">
+      <step number="1">list_files - Find all scan reports</step>
+      <step number="2">read_file - Read scan reports (multiple at once)</step>
+    </phase>
+    <phase name="analysis">
+      <step number="3">search_files - Find specific patterns if needed</step>
+      <step number="4">execute_command - Extract data with jq if needed</step>
+    </phase>
+    <phase name="generation">
+      <step number="5">ask_followup_question - Get missing info from user</step>
+      <step number="6">write_to_file - Create SBOM JSON file</step>
+      <step number="7">write_to_file - Create documentation markdown</step>
+    </phase>
+    <phase name="validation">
+      <step number="8">execute_command - Validate JSON syntax</step>
+    </phase>
+    <phase name="upload">
+      <step number="9">use_mcp_tool - Upload SBOM to Concert</step>
+      <step number="10">use_mcp_tool - Upload scan reports to Concert</step>
+    </phase>
+  </workflow_tool_sequence>
+
+  <mcp_upload_workflow>
+    <description>
+      Complete workflow for uploading generated SBOM and scan reports to IBM Concert
+    </description>
+    <prerequisites>
+      <prerequisite>Concert MCP server is configured and running</prerequisite>
+      <prerequisite>Concert API credentials are set in config.json</prerequisite>
+      <prerequisite>SBOM file has been generated and validated</prerequisite>
+    </prerequisites>
+    <steps>
+      <step number="1">
+        <action>Upload Application SBOM</action>
+        <tool>use_mcp_tool with upload_application_sbom</tool>
+        <parameters>
+          <parameter>file_path: Path to generated SBOM JSON file</parameter>
+        </parameters>
+        <success_criteria>Response indicates successful upload</success_criteria>
+      </step>
+      <step number="2">
+        <action>Upload Vulnerability Scan Reports</action>
+        <tool>use_mcp_tool with upload_vulnerability_scan</tool>
+        <parameters>
+          <parameter>file_path: Path to scan report file</parameter>
+          <parameter>scanner_name: Scanner type (trivy, snyk, grype, etc.)</parameter>
+          <parameter>metadata: Optional additional context</parameter>
+        </parameters>
+        <success_criteria>Response indicates successful upload</success_criteria>
+      </step>
+      <step number="3">
+        <action>Document Upload Results</action>
+        <details>
+          Add upload confirmation to generation documentation:
+          - Upload timestamp
+          - Files uploaded
+          - Upload status (success/failure)
+          - Any error messages
+        </details>
+      </step>
+    </steps>
+  </mcp_upload_workflow>
+
+  <efficiency_tips>
+    <tip>Read multiple scan reports in a single read_file call</tip>
+    <tip>Use search_files to quickly locate specific patterns across files</tip>
+    <tip>Validate JSON with jq before finalizing SBOM</tip>
+    <tip>Generate timestamp dynamically rather than hardcoding</tip>
+    <tip>Create both SBOM and documentation in same workflow</tip>
+  </efficiency_tips>
+</tool_usage_guide>
+
+<!-- Made with Bob -->

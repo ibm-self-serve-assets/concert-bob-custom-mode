@@ -1,0 +1,391 @@
+<concertdef_sbom_examples>
+  <overview>
+    Complete examples demonstrating how to generate ConcertDef SBOM files
+    from various vulnerability scan reports.
+  </overview>
+
+  <example name="trivy_container_scan">
+    <description>
+      Generate SBOM from Trivy container image scan report
+    </description>
+    <scenario>
+      User provides a Trivy JSON scan report for a container image and wants
+      to generate a ConcertDef SBOM for upload to IBM Concert.
+    </scenario>
+    <input_files>
+      <file>trivy-report.json - Trivy scan output</file>
+    </input_files>
+    <workflow>
+      <step number="1">
+        <action>Read the Trivy report</action>
+        <tool>read_file</tool>
+        <extract>
+          - ArtifactName (image name)
+          - Metadata.RepoTags (image tags)
+          - Metadata.RepoDigests (SHA256 digest)
+          - Results[].Target (scan target)
+        </extract>
+      </step>
+      <step number="2">
+        <action>Create base SBOM structure</action>
+        <output>
+          {
+            "bomFormat": "ConcertDef",
+            "specVersion": "1.0.2",
+            "metadata": {
+              "timestamp": "2024-12-06T15:23:57Z",
+              "type": "application",
+              "component": {
+                "name": "my-application",
+                "version": "1.0.0"
+              },
+              "business": {
+                "name": "Acme Inc."
+              }
+            }
+          }
+        </output>
+      </step>
+      <step number="3">
+        <action>Add container component from Trivy data</action>
+        <output>
+          "components": [{
+            "bom-ref": "build:my-application",
+            "type": "build",
+            "name": "my-application",
+            "version": "1.0.0",
+            "components": [{
+              "bom-ref": "container:us.icr.io/myregistry/myapp",
+              "type": "container",
+              "name": "us.icr.io/myregistry/myapp",
+              "uri": "us.icr.io/myregistry/myapp@sha256:abc123...",
+              "tag": "1.0.0",
+              "digest": "sha256:abc123...",
+              "properties": [{
+                "name": "base_image",
+                "value": "ubi9"
+              }]
+            }]
+          }]
+        </output>
+      </step>
+      <step number="4">
+        <action>Add environments, services, and dependencies</action>
+      </step>
+      <step number="5">
+        <action>Validate and save SBOM</action>
+      </step>
+    </workflow>
+  </example>
+
+  <example name="multiple_scan_reports">
+    <description>
+      Generate SBOM from multiple scan reports (Trivy + Snyk)
+    </description>
+    <scenario>
+      User has both Trivy container scan and Snyk dependency scan reports
+      for the same application.
+    </scenario>
+    <input_files>
+      <file>trivy-container.json - Container image scan</file>
+      <file>snyk-dependencies.json - Dependency scan</file>
+    </input_files>
+    <workflow>
+      <step number="1">
+        <action>Read all scan reports</action>
+        <tool>read_file (multiple files)</tool>
+      </step>
+      <step number="2">
+        <action>Extract container info from Trivy</action>
+        <extract>Image name, tag, digest, base image</extract>
+      </step>
+      <step number="3">
+        <action>Extract dependencies from Snyk</action>
+        <extract>Package names, versions, package manager type</extract>
+      </step>
+      <step number="4">
+        <action>Merge component information</action>
+        <note>
+          Create single build component containing both container
+          and library components
+        </note>
+      </step>
+      <step number="5">
+        <action>Generate complete SBOM</action>
+        <structure>
+          - Build component (top level)
+            - Container component (from Trivy)
+            - Library components (from Snyk)
+            - Code repository component
+        </structure>
+      </step>
+    </workflow>
+  </example>
+
+  <example name="complete_sbom_structure">
+    <description>
+      Complete ConcertDef SBOM with all sections populated
+    </description>
+    <sbom_structure>
+      <![CDATA[
+{
+  "bomFormat": "ConcertDef",
+  "specVersion": "1.0.2",
+  "metadata": {
+    "timestamp": "2024-12-06T15:23:57Z",
+    "type": "application",
+    "component": {
+      "name": "my-microservice",
+      "version": "2.1.0"
+    },
+    "business": {
+      "name": "Acme Corporation",
+      "units": [{
+        "name": "Engineering",
+        "email": "engineering@acme.com",
+        "phone": "(555) 123-4567"
+      }]
+    }
+  },
+  "components": [{
+    "bom-ref": "build:my-microservice",
+    "type": "build",
+    "name": "my-microservice",
+    "version": "2.1.0",
+    "components": [
+      {
+        "bom-ref": "container:us.icr.io/acme/my-microservice",
+        "type": "container",
+        "name": "us.icr.io/acme/my-microservice",
+        "uri": "us.icr.io/acme/my-microservice@sha256:abc123def456...",
+        "tag": "2.1.0",
+        "digest": "sha256:abc123def456...",
+        "properties": [{
+          "name": "base_image",
+          "value": "ubi9-minimal"
+        }]
+      },
+      {
+        "bom-ref": "repository:coderepo:github:my-microservice",
+        "type": "code",
+        "name": "my-microservice",
+        "purl": "https://github.com/acme/my-microservice",
+        "commit_sha": "a1b2c3d4e5f6789012345678901234567890abcd",
+        "branch": "main",
+        "properties": [{
+          "name": "version_control",
+          "value": "github"
+        }]
+      }
+    ]
+  }],
+  "environments": [
+    {
+      "bom-ref": "environment:dev",
+      "type": "environment",
+      "name": "dev",
+      "access-points": [{
+        "ref": "appapi:my-microservice",
+        "base-url": "https://dev.acme.com/api"
+      }],
+      "properties": [{
+        "name": "platform_type",
+        "value": "kubernetes"
+      }]
+    },
+    {
+      "bom-ref": "environment:prod",
+      "type": "environment",
+      "name": "prod",
+      "access-points": [{
+        "ref": "appapi:my-microservice",
+        "base-url": "https://api.acme.com"
+      }],
+      "properties": [{
+        "name": "platform_type",
+        "value": "kubernetes"
+      }]
+    }
+  ],
+  "services": [{
+    "bom-ref": "appapi:my-microservice",
+    "name": "my-microservice",
+    "endpoints": ["/api/v1", "/health"],
+    "properties": [{
+      "name": "network_exposure",
+      "value": "public"
+    }]
+  }],
+  "dependencies": [{
+    "ref": "container:us.icr.io/acme/my-microservice",
+    "dependsOn": [
+      "appapi:my-microservice",
+      "repository:coderepo:github:my-microservice"
+    ]
+  }],
+  "properties": [
+    {
+      "name": "application_criticality",
+      "value": "4"
+    },
+    {
+      "name": "application_data_assessment_impact_risk",
+      "value": "3"
+    },
+    {
+      "name": "revenue",
+      "value": "5000000"
+    }
+  ],
+  "tags": ["microservice", "api", "production"]
+}
+      ]]>
+    </sbom_structure>
+    <explanation>
+      <section name="metadata">
+        Contains application identification, timestamp, and business context
+      </section>
+      <section name="components">
+        Build component with nested container and code repository components
+      </section>
+      <section name="environments">
+        Development and production environments with access points
+      </section>
+      <section name="services">
+        Application service with API endpoints
+      </section>
+      <section name="dependencies">
+        Shows container depends on service and code repository
+      </section>
+      <section name="properties">
+        Application-level properties for criticality and risk assessment
+      </section>
+      <section name="tags">
+        Simple tags for categorization
+      </section>
+    </explanation>
+  </example>
+
+  <example name="documentation_template">
+    <description>
+      Template for SBOM generation documentation
+    </description>
+    <markdown_template>
+      <![CDATA[
+# ConcertDef SBOM Generation Report
+
+## Application Information
+- **Name**: [Application Name]
+- **Version**: [Version]
+- **Generated**: [Timestamp]
+
+## Scan Reports Analyzed
+| Scanner | Version | Report File | Scan Date |
+|---------|---------|-------------|-----------|
+| Trivy   | v0.48.0 | trivy-report.json | 2024-12-06 |
+| Snyk    | v1.1234.0 | snyk-report.json | 2024-12-06 |
+
+## Components Identified
+### Containers
+- **us.icr.io/acme/my-app:1.0.0**
+  - Digest: sha256:abc123...
+  - Base Image: ubi9
+  - Source: Trivy scan
+
+### Code Repositories
+- **github.com/acme/my-app**
+  - Commit: a1b2c3d4...
+  - Branch: main
+  - Source: Repository metadata
+
+### Libraries
+- **express@4.18.2** (npm)
+- **lodash@4.17.21** (npm)
+- Source: Snyk dependency scan
+
+## Environments
+- **dev**: Development environment (Kubernetes)
+- **prod**: Production environment (Kubernetes)
+
+## Services
+- **my-app-api**: REST API service
+  - Endpoints: /api/v1, /health
+  - Exposure: Public
+
+## Assumptions and Decisions
+1. Used current timestamp for SBOM generation
+2. Inferred environment names from standard conventions
+3. Mapped container to service based on naming patterns
+4. Business unit information provided by user
+
+## Validation Results
+✓ Schema compliance verified
+✓ All bom-ref values are unique
+✓ All dependency references are valid
+✓ Required fields present
+✓ JSON syntax valid
+
+## Upload Instructions
+1. Log in to IBM Concert
+2. Navigate to Application SBOMs section
+3. Click "Upload SBOM"
+4. Select the generated file: `my-app-sbom.json`
+5. Verify upload success
+
+## Generated Files
+- `my-app-sbom.json` - ConcertDef SBOM file
+- `sbom-generation-report.md` - This documentation
+      ]]>
+    </markdown_template>
+  </example>
+
+  <example name="error_handling">
+    <description>
+      How to handle common issues during SBOM generation
+    </description>
+    <scenarios>
+      <scenario name="missing_digest">
+        <problem>Container image digest not found in scan report</problem>
+        <solution>
+          1. Check if scan report includes image metadata
+          2. Look for RepoDigests or similar fields
+          3. If unavailable, document in generation report
+          4. Consider re-scanning with digest capture enabled
+        </solution>
+      </scenario>
+
+      <scenario name="unknown_scanner_format">
+        <problem>Scan report format not recognized</problem>
+        <solution>
+          1. Examine JSON structure to identify key fields
+          2. Look for common patterns (artifacts, vulnerabilities, packages)
+          3. Extract component information manually
+          4. Document the custom parsing approach
+          5. Ask user for clarification if needed
+        </solution>
+      </scenario>
+
+      <scenario name="missing_business_info">
+        <problem>No organization/business information provided</problem>
+        <solution>
+          1. Use ask_followup_question to request organization name
+          2. Provide example format
+          3. Explain importance for IBM Concert
+          4. Use placeholder if user cannot provide, with documentation
+        </solution>
+      </scenario>
+
+      <scenario name="duplicate_components">
+        <problem>Same component appears in multiple scan reports</problem>
+        <solution>
+          1. Identify duplicates by comparing identifiers
+          2. Merge information from all sources
+          3. Prefer more detailed/recent information
+          4. Document which reports contributed to final component
+        </solution>
+      </scenario>
+    </scenarios>
+  </example>
+</concertdef_sbom_examples>
+
+<!-- Made with Bob -->

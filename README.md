@@ -22,7 +22,7 @@ Windows: `%USERPROFILE%\.bob\`
 
 
 
-6. Configure Concert MCP server following the steps provided in the [concert-mcp-server](https://github.ibm.com/dimallya/concert-mcp-server) repository. This provides tools for uploading various artifacts to configured IBM Concert environment. 
+6. Configure Concert MCP server following the steps provided in the [concert-custom-mcp-server](https://github.com/ibm-self-serve-assets/concert-custom-mcp-server) repository. This provides tools for uploading various artifacts to configured IBM Concert environment. 
 7. Restart the BoB IDE.
 
 **Ensure following before you begin**:

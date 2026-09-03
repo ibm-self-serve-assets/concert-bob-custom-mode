@@ -1,49 +1,211 @@
-# concert-bob-custom-mode
+# concert-bob-custom-mode (Automating Application SBOM generation & uploads for IBM Concert)
+ 
+This repository describes how to use the **ConcertDef-SBOM** custom mode in IBM Bob to generate a Concert-compatible **Application Software Bill of Materials (SBOM)** for given vulnerability scan reports. In Concert, creating an application with relevant components is necessary to upload vulnerability scan reports.  In addition, it shows how to use IBM Bob to upload the generated Application SBOM, container image scan reports, and source code scan reports directly into IBM Concert.
 
-## Overview
-This repository contains files required to create **ConcertDef-SBOM** custom mode in BoB which can be leveraged to generate Application SBOM for given vulnerability scan reports. In Concert, creating an application with relevant components is necessary to upload vulnerability scan reports. The mode also helps in uploading the generated Application SBOMs and avaiable vulnerability scan reports to IBM Concert.
+## 1. Configure the ConcertDef-SBOM Custom Mode
 
-## Enabling the ConcertDef-SBOM custom mode
+Let us install the ConcertDef-SBOM Custom Mode
 
-Follow the below steps to enable the custom mode **ConcertDef-SBOM**
-1. On the top right of the BoB IDE chat window, click on **Settings** (gear icon).
-2. Click on **Modes**
-3. Locate **Global Modes** and click on **Open** to open Global Modes Configuration file.
-4. Copy the content of custom mode **ConcertDef-SBOM** from `custom_modes.yaml`file available in this repository.
-5. Copy `rules-concertdef-sbom` directory in your global directory. 
+<details><summary>Click for more info</summary>
 
-**Linux/macOS**: `cp -R rules-concertdef-sbom ~/.bob/`
+1. Goto the Global **.bob** in the file explorer.
+   - Linux/macOS: **~/.bob/**
+   - Windows: **##USERPROFILE##/.bob**
+2. Copy the [rules-concertdef-sbom](./rules-concertdef-sbom/) directory under global bob folder.
 
-__Note__: 
-Global directory location
-
-Linux/macOS: `~/.bob/` 
-Windows: `%USERPROFILE%\.bob\`
-
+Sample copy command for **Linux/macOS** :
+```
+cp -R rules-concertdef-sbom ~/.bob
+```
+<img src="images/img40.png" border=1 >
 
 
-6. Configure Concert MCP server following the steps provided in the [concert-custom-mcp-server](https://github.com/ibm-self-serve-assets/concert-custom-mcp-server) repository. This provides tools for uploading various artifacts to configured IBM Concert environment. 
-7. Restart the BoB IDE.
+3. Append the content of the **~/.bob/settings/custom_modes.yaml** with the [custom_modes.yaml](./custom_modes.yaml) file from this repo.
 
-**Ensure following before you begin**:
-1. Concert MCP server is running and tools are loaded in BoB IDE.
-2. Custom mode **ConcertDef-SBOM** is available in Mode Selector drop down in the bottom of chat window.
+**Note:** You need to copy from second line **- slug: concertdef-sbom** and paste at the end of the file. Don't forget to follow the indentation.
 
-## Using custom mode and Concert MCP server tools
-Trivy reports of robot-shop sample application are provided for verification in the directory `robot-shop-scan-reports`. It consists of a source code scan report and few image scan reports.
-1. Open `robot-shop-scan-reports` directory in BoB IDE.
-2. Select **ConcertDef-SBOM** custom mode for interaction.
-3. Use prompts similar to following:
-   ### Application SBOM Generation 
-   *Trivy scan reports of "robot-shop" application container images and code repository are available in this directory. Refer the details and generate ConcertDef SBOM for application robot-shop. Do not add any extra information in SBOM for environment, service or public access points. The code repository URL to be included is "https://github.com/instana/robot-shop"*
+<img src="images/img41.png" >
 
-   **Note**: As having source code repository URL is mandatory in Application SBOM if uploading source-code scan report, the detail of the same needs to be provided.  
-   ### Uploading Applciation SBOM
-   *Upload robot-shop ConcertDef SBOM  @/robot-shop-sbom.json to IBM Concert.*
+<img src="images/img42.png"  >
 
-   **Note**: Here `robot-shop-sbom.json` is the name of the ConcertDef SBOM generated in previous step.
-   ### Uploading Vulnerability Scan Reports - Source Code
-   *Upload source code scan report @/rs-repo-scan.json to robot-shop application in IBM Concert. The repository URL is https://github.com/instana/robot-shop*
-   ### Uploading Vulnerability Scan Reports - Container Image
-   *Upload Trivy Vulnerability Scan Reports of all images in this directory to IBM Concert*
+The ConcerDef mode should appear in the Mode section.(if not visible, restart the Bob IDE)
+
+<img src="images/img43.png" >
+
+4. Select the **ConcertDef SBOM** Custom mode in the IBM Bob. 
+
+This custom mode is designed to generate a Concert application SBOM using source code repo.
+
+<img src="images/img02.png" >
+
+</details>
+
+
+## 2. Configure the MCP Server
+
+Let us confiugre the custom MCP Server.
+
+<details><summary>Click for more info</summary>
+
+
+1. Install the **Concert** MCP Server by following the instructions available in this [link](https://github.com/ibm-self-serve-assets/concert-custom-mcp-server). 
+
+2. Restart the BoB IDE.
+
+3. Enable the **Concert** MCP Server.
+
+<img src="images/img01.png" >
+
+</details>
+
+## 3. Generate Application SBOM
+
+Let us generate Application SBOM for the Robot Shop application..
+
+<details><summary>Click for more info</summary>
+
+1. Copy the Trivy vulnerability scan reports to the IBM Bob working directory. The sample scan reports are available [here](./robot-shop-scan-reports)
    
+2. In IBM Bob, use the following prompt to generate an SBOM for the robot-shop application:
+```
+Refer the Trivy reports in this directory and generate a ConcertDef SBOM for application robot-shop. Repo URL: https://github.com/instana/robot-shop”
+```
+
+<img src="images/img03.png" >
+
+The SBOM is generated like this.
+
+<img src="images/img04.png" >
+
+</details>
+
+
+## 4. Upload the Application SBOM into Concert
+
+After generating the SBOM, let us upload it into IBM Concert to create the application inventory.
+
+<details><summary>Click for more info</summary>
+
+### 4.1 Upload the SBOM
+
+1. Give the prompt like this in IBM Bob to upload SBOM for the **robot-shop** application.
+
+```
+Upload robot-shop ConcertDef SBOM @/robot-shop-sbom.json to IBM Concert.
+```
+<img src="images/img05.png">
+
+The mcp tool **upload_application_sbom** is called.
+
+<img src="images/img06.png">
+
+The task is completed.
+
+<img src="images/img07.png">
+
+### 4.2. Verify the Application Inventory
+
+1. Open the Application Inventory page for the robot-shop application.
+<img src="images/img08.png">
+
+2. View the **Repositories** tab shows 1 entry.
+
+<img src="images/img09.png">
+
+3. View the Multiple entries in the **Build artifacts** tab. 
+
+<img src="images/img10.png">
+
+</details>
+
+
+## 5. Uploading Vulnerability Scan Reports - Container Image
+
+Let us upload the container image scan reports generated by Trivy into IBM Concert and review the associated vulnerability data.
+
+<details><summary>Click for more info</summary>
+
+### 5.1 Upload Image Scan report
+
+1. Give the following prompt in IBM Bob to upload image scan report for the **robot-shop** application.
+
+```
+Upload all Trivy image scan reports in this directory to IBM Concert.
+```
+<img src="images/img11.png">
+
+IBM Bob invokes the **upload_image_scan** MCP tool.
+
+<img src="images/img12.png">
+
+The image scan reports are processed and uploaded successfully
+
+<img src="images/img13.png">
+
+### 5.2. Verify Uploaded Results
+
+1. View the **Event log** to monitor the upload status.
+<img src="images/img14.png">
+
+2. Open the application's **CVEs** tab to view the vulnerabilities associated with the uploaded image scan reports.
+<img src="images/img15.png">
+
+3. Open the **Build Artifacts** tab to review the **CVEs** associated with individual artifacts.
+<img src="images/img16.png">
+
+4. Open the **Packages** tab to view package-level **vulnerabilities**.
+<img src="images/img17.png">
+
+1. Navigate to the **Vulnerabilities** page to view all **CVEs**.
+   
+<img src="images/img18.png">
+
+</details>
+
+## 6. Uploading Vulnerability Scan Reports - Source Code
+
+Let us upload the source code scan reports into IBM Concert and review the associated vulnerability data.
+
+<details><summary>Click for more info</summary>
+
+### 6.1 Uploading Source Code report
+
+1. Give the prompt like this in IBM Bob to upload source code scan report for the **robot-shop** application.
+
+```
+Upload all Trivy source scan reports in this directory to IBM Concert.
+```
+
+<img src="images/img19.png">
+
+BM Bob invokes the **upload_source_scan** MCP tool and uploads the source scan results.
+
+The task is completed.
+
+After the upload completes successfully, the scan information is linked to the application inventory.
+
+<img src="images/img20.png">
+
+### 6.2 Verify Uploaded Results
+
+1. Open the application's **Repositories** tab to review vulnerabilities associated with the source code repository.
+
+<img src="images/img21.png">
+
+</details>
+
+
+## Conclusion
+
+The ConcertDef-SBOM custom mode simplifies the process of generating a Concert-compatible application SBOM from vulnerability scan reports and seamlessly uploading security artifacts into IBM Concert.
+
+By leveraging IBM Bob and the Concert MCP tools, organisations can:
+
+Automate application SBOM generation from existing Trivy scan reports.
+Establish application inventory and topology in IBM Concert.
+Upload and correlate image scan reports with build artifacts and packages.
+Upload source code scan reports to associate vulnerabilities with repositories.
+Gain end-to-end visibility of application components, dependencies, and security risks within a single platform.
+
+This approach reduces manual effort, improves security data onboarding, and enables security and operations teams to rapidly build a comprehensive application security posture in IBM Concert.
+

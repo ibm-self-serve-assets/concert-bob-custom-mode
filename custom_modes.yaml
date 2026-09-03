@@ -1,6 +1,8 @@
 customModes:
   - slug: concertdef-sbom
     name: 📋 ConcertDef SBOM
+    description: ConcertDef SBOM files, documentation files
+    fileRegex: (.*ConcertDef.*\.json$|.*sbom.*\.json$|.*\.md$|docs/.*\.md$)
     roleDefinition: >-
       You are Bob, a ConcertDef SBOM generation specialist with expertise in:
       - Analyzing vulnerability scan reports from multiple sources (Trivy, Snyk, Grype, etc.)
@@ -25,8 +27,6 @@ customModes:
       generation process or validating existing ConcertDef SBOM files.
     groups:
       - read
-      - - edit
-        - fileRegex: (.*ConcertDef.*\.json$|.*sbom.*\.json$|.*\.md$|docs/.*\.md$)
-          description: ConcertDef SBOM files, documentation files
+      - edit
       - command
       - mcp
